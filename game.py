@@ -1,12 +1,11 @@
 from board import Board
-from utils import Stone, make_2d_array
+from utils import Stone, make_2d_array, get_opposite_stone
 import numpy as np
 
 class Group(object):
-    def __init__(self, stone, liberties=None):
-        if liberties is None:
-            liberties = set()
-        self.liberties = liberties
+    def __init__(self, stone, liberties=None, coords=None):
+        self.liberties = liberties or set()
+        self.coords = coords or set()
         self.stone = stone
         self._group = self
 
@@ -18,7 +17,7 @@ class Group(object):
     def group(self):
         g = self
         stack = []
-        while g != g._group:
+        while g is not None and g != g._group:
             stack.append(g)
             g = g._group
         new_group = g
@@ -28,30 +27,30 @@ class Group(object):
         return new_group
 
     @staticmethod
-    def merge(stone, groups, liberties=None):
+    def merge(stone, groups, merge_coord, liberties=None):
         liberties = liberties or set()
-        seen_groups = set()
+        coords = set()
         for g in groups:
             
             '''
             error out if we are merging different color stones
-            or if we are merging groups that are already together
             '''
             assert(g == g.group)
             assert(g.stone == stone)
-            assert(g not in seen_groups)
-            seen_groups.add(g)
 
             liberties |= g.liberties
+            coords |= g.coords
 
-        new_group = Group(stone, liberties=liberties)
+        new_group = Group(stone, liberties=liberties, coords=coords)
+        new_group.liberties.discard(merge_coord)
+        new_group.coords.add(merge_coord)
         return new_group
 
     def assign_group(self, g):
         self._group = g
 
     def __str__(self):
-        return f'{super().__str__()}, liberties: {self.liberties}'
+        return f'{super().__str__()},\nliberties: {self.liberties},\ncoords: {self.coords}'
 
 
 class GroupManager(object):
@@ -59,6 +58,7 @@ class GroupManager(object):
         self.board = board
         board_size = board.board_size
         self._group_map = make_2d_array(board_size, board_size)
+        self.captured_groups = set()
 
     def _get_group(self, y, x):
         g = self._group_map[y][x]
@@ -69,27 +69,40 @@ class GroupManager(object):
             self._group_map[y][x] = new_g
         return new_g
 
-    def merge_groups(self, y, x):
-        groups = []
+    def resolve_groups(self, y, x):
+        groups = set()
         stone = self.board[y][x]
+        opposite_stone = get_opposite_stone(stone)
         ncoords = self.board.get_neighbour_coordinates(y, x)
         liberties = set()
 
         for ny, nx in ncoords:
-            if self.board[ny][nx] != stone:
-                continue
             g = self._get_group(ny, nx)
-            if g is None:
-                liberties.add((ny, nx))
-            else:
-                groups.append(g)
 
-        new_group = Group.merge(stone, groups, liberties=liberties)
-        new_group.liberties.discard((y, x))
+            if self.board[ny][nx] == Stone.EMPTY:
+                liberties.add((ny, nx))
+
+            elif self.board[ny][nx] == opposite_stone:
+                g.liberties.discard((y, x))
+                if g.num_liberties <= 0:
+                    g.assign_group(None)
+                    self.captured_groups.add(g)
+
+            else:
+                groups.add(g)
+
+        new_group = Group.merge(stone, groups, (y, x), liberties=liberties)
         
         for g in groups:
             g.assign_group(new_group)
         self._group_map[y][x] = new_group
+
+    def update_board(self):
+        for g in self.captured_groups:
+            for y, x in g.coords:
+                self.board[y][x] = Stone.EMPTY
+                self._group_map[y][x] = None
+        self.captured_groups.clear()
 
 
 class Game(object):
@@ -115,7 +128,8 @@ class Game(object):
         if stone == Stone.EMPTY:
             return
         self.board.place_stone(stone, y, x)
-        self.gm.merge_groups(y, x)
+        self.gm.resolve_groups(y, x)
+        self.gm.update_board()
 
     def render_board(self):
         self.board._render()

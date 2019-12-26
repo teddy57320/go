@@ -3,5 +3,11 @@ class Stone:
     BLACK = 1
     WHITE = 2
 
+def get_opposite_stone(stone):
+    assert(stone != Stone.EMPTY)
+    if stone == Stone.BLACK:
+        return Stone.WHITE
+    return Stone.BLACK
+
 def make_2d_array(h, w, default=lambda: None):
     return [[default() for i in range(w)] for j in range(h)]
