@@ -37,7 +37,6 @@ class Board(np.ndarray):
 
     def place_stone(self, stone, y, x):
         self[y][x] = stone
-        # self.moves.append((y, x))
 
     def _value_to_render(self, x):
         s = None

@@ -15,6 +15,10 @@ class Group(object):
         return len(self.liberties)
 
     @property
+    def num_removed_liberties(self):
+        return len(self.removed_liberties)
+
+    @property
     def group(self):
         g = self
         stack = []
@@ -62,6 +66,12 @@ class Group(object):
         self.liberties.add(coord)
         self.removed_liberties.discard(coord)
 
+    def has_liberty(self, coord):
+        return coord in self.liberties
+    
+    def has_removed_liberty(self, coord):
+        return coord in self.removed_liberties
+
     def __str__(self):
         return f'{super().__str__()},\nliberties: {self.liberties},\ncoords: {self.coords}'
 
@@ -89,6 +99,9 @@ class GroupManager(object):
             return True
         return False
 
+    def is_same_group(self, y1, x1, y2, x2):
+        return self._get_group(y1, x1) == self._get_group(y2, x2)
+
     def resolve_groups(self, y, x):
         groups = set()
         stone = self.board[y, x]
@@ -115,10 +128,8 @@ class GroupManager(object):
 
         new_group = Group.merge(stone, groups, (y, x), liberties=new_group_liberties)
 
-
         # if we fail to capture an adjacent opposite stone, then it will 
         # decrease this group's liberty, potentially resulting in self destruction
-
         for uy, ux in uncaptured:
             new_group.remove_liberty((uy, ux))
 
