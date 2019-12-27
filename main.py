@@ -1,5 +1,6 @@
 import yaml
-from board import Board
+from src.board import Board
+from src.game import Game
 
 def main(config):
     print(config)

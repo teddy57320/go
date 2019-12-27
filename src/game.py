@@ -1,5 +1,5 @@
-from board import Board
-from utils import Stone, make_2d_array, get_opposite_stone
+from src.board import Board
+from src.utils import Stone, make_2d_array, get_opposite_stone
 import numpy as np
 
 class Group(object):

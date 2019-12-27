@@ -1,5 +1,5 @@
 import numpy as np
-from utils import Stone
+from src.utils import Stone
 
 class Board(np.ndarray):
 
@@ -50,7 +50,8 @@ class Board(np.ndarray):
         return f'[{s}]'
 
     def _render(self):
-        print('   ' + '  '.join([str(x) for x in range(self.board_size)]))
+        print('\n   ' + '  '.join([str(x) for x in range(self.board_size)]))
         for row in range(self.board_size):
             board_row = map(self._value_to_render, self[row])
             print(f'{row} ' + ''.join(board_row))
+        print('')
