@@ -1,5 +1,6 @@
 from src.board import Board
 from src.utils import Stone, make_2d_array, get_opposite_stone
+from src.exceptions import SelfDestructException, KoException
 import numpy as np
 
 class Group(object):
@@ -17,6 +18,10 @@ class Group(object):
     @property
     def num_removed_liberties(self):
         return len(self.removed_liberties)
+
+    @property
+    def num_coords(self):
+        return len(self.coords)
 
     @property
     def group(self):
@@ -77,11 +82,16 @@ class Group(object):
 
 
 class GroupManager(object):
-    def __init__(self, board):
+    def __init__(self, board, enable_self_destruct):
         self.board = board
         board_size = board.board_size
         self._group_map = make_2d_array(board_size, board_size)
         self.captured_groups = set()
+        self.num_captured_stones = {
+            Stone.WHITE: 0,
+            Stone.BLACK: 0
+        }
+        self.enable_self_destruct = enable_self_destruct
 
     def _get_group(self, y, x):
         g = self._group_map[y][x]
@@ -93,11 +103,11 @@ class GroupManager(object):
         return new_g
 
     def _process_capture(self, group):
-        if group.num_liberties <= 0:
-            group.assign_group(None)
-            self.captured_groups.add(group)
-            return True
-        return False
+        if group.num_liberties > 0:
+            return False
+        group.assign_group(None)
+        self.captured_groups.add(group)
+        return True
 
     def is_same_group(self, y1, x1, y2, x2):
         return self._get_group(y1, x1) == self._get_group(y2, x2)
@@ -137,9 +147,23 @@ class GroupManager(object):
         if self_destruct:
             new_group = None
 
+            '''
+            undo any processing we have done to restore the game state
+            no need to "uncapture" any opposite stone groups since if there were a 
+            capture, it would not be a self destruction
+            '''
+            if not self.enable_self_destruct:
+                for ny, nx in ncoords:
+                    if self.board[ny, nx] == opposite_stone:
+                        g = self._get_group(ny, nx)
+                        g.restore_liberty((y, x))
+                raise SelfDestructException('Self destruction is not permitted. Please choose a different move.')
+
         for g in groups:
             g.assign_group(new_group)
         self._group_map[y][x] = new_group
+
+        return True
 
     def update_state(self):
         
@@ -162,6 +186,9 @@ class GroupManager(object):
                     if ncoord in g.coords:
                         group_to_change.restore_liberty(ncoord)
 
+            # record the captured groups
+            self.num_captured_stones[g.stone] += g.num_coords
+
         self.captured_groups.clear()
 
 
@@ -170,7 +197,7 @@ class Game(object):
         self.board = Board(config)
         self.board_size = config['board_size']
         self.moves = []
-        self.gm = GroupManager(self.board)
+        self.gm = GroupManager(self.board, enable_self_destruct=config['enable_self_destruct'])
 
     def undo_last_move(self):
         if not self.moves:
@@ -188,8 +215,22 @@ class Game(object):
         if stone == Stone.EMPTY:
             return
         self.board.place_stone(stone, y, x)
-        self.gm.resolve_groups(y, x)
+
+        try:
+            self.gm.resolve_groups(y, x)
+        except SelfDestructException as e:
+            self.board.remove_stone(y, x)
+            raise e
+            
         self.gm.update_state()
+
+    @property
+    def num_black_captured(self):
+        return self.gm.num_captured_stones[Stone.BLACK]
+
+    @property
+    def num_white_captured(self):
+        return self.gm.num_captured_stones[Stone.WHITE]
 
     def render_board(self):
         self.board._render()

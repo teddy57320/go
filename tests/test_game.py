@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 from src.game import Game, Group
 from src.utils import Stone
+from src.exceptions import SelfDestructException
 
 def capture1(game):
     '''
@@ -139,7 +140,8 @@ class TestGame(unittest.TestCase):
 
         configs = {'black_stone': self.black_stone,
                    'white_stone': self.white_Stone,
-                   'board_size': self.board_size
+                   'board_size': self.board_size,
+                   'enable_self_destruct': True
         }
 
         self.game = Game(configs)
@@ -163,6 +165,7 @@ class TestGame(unittest.TestCase):
         self.assertEqual(self.game.board[3, 4], Stone.WHITE)
         self.assertEqual(self.game.board[5, 4], Stone.WHITE)
         self.assertEqual(self.game.board[4, 5], Stone.WHITE)
+        self.assertEqual(self.game.num_black_captured, 1)
 
     def test__capture2(self):
         capture2(self.game)
@@ -174,6 +177,7 @@ class TestGame(unittest.TestCase):
         self.assertEqual(self.game.board[5, 4], Stone.WHITE)
         self.assertEqual(self.game.board[4, 5], Stone.WHITE)
         self.assertEqual(self.game.board[3, 5], Stone.WHITE)
+        self.assertEqual(self.game.num_black_captured, 3)
 
     def test__capture3(self):
         capture3(self.game)
@@ -184,6 +188,7 @@ class TestGame(unittest.TestCase):
         self.assertEqual(self.game.board[3, 3], Stone.WHITE)
         self.assertEqual(self.game.board[5, 5], Stone.WHITE)
         self.assertEqual(self.game.board[5, 4], Stone.WHITE)
+        self.assertEqual(self.game.num_black_captured, 1)
 
     def test__self_destruct1(self):
         self_destruct1(self.game)
@@ -192,6 +197,7 @@ class TestGame(unittest.TestCase):
         self.assertEqual(self.game.board[3, 4], Stone.WHITE)
         self.assertEqual(self.game.board[5, 4], Stone.WHITE)
         self.assertEqual(self.game.board[4, 5], Stone.WHITE)
+        self.assertEqual(self.game.num_black_captured, 1)
 
     def test__self_destruct2(self):
         self_destruct2(self.game)
@@ -203,11 +209,12 @@ class TestGame(unittest.TestCase):
         self.assertEqual(self.game.board[5, 4], Stone.WHITE)
         self.assertEqual(self.game.board[4, 5], Stone.WHITE)
         self.assertEqual(self.game.board[3, 5], Stone.WHITE)
+        self.assertEqual(self.game.num_black_captured, 3)
 
-    def test_self_destruct3(self):
+    def test__self_destruct3(self):
         self_destruct3(self.game)
 
-        for y, x in [(2, 2), (2, 3), (2, 4), (3, 4), (4, 4), (4, 3), (4, 2), (3, 2)]:
+        for y, x in [(2, 2), (2, 3), (2, 4), (3, 4), (3, 3), (4, 4), (4, 3), (4, 2), (3, 2)]:
             self.assertEqual(self.game.board[y, x], Stone.EMPTY)
 
         for y, x in [(1, 1), (1, 2), (1, 3), (1, 4), (1, 5),
@@ -215,6 +222,7 @@ class TestGame(unittest.TestCase):
                      (5, 4), (5, 3), (5, 2), (5, 1),
                      (4, 1), (3, 1), (2, 1)]:
             self.assertEqual(self.game.board[y, x], Stone.WHITE)
+        self.assertEqual(self.game.num_black_captured, 9)
 
 
 class TestGameGroups(unittest.TestCase):
@@ -228,7 +236,8 @@ class TestGameGroups(unittest.TestCase):
 
         configs = {'black_stone': self.black_stone,
                    'white_stone': self.white_Stone,
-                   'board_size': self.board_size
+                   'board_size': self.board_size,
+                   'enable_self_destruct': False
         }
 
         self.game = Game(configs)
@@ -435,12 +444,32 @@ class TestGameGroups(unittest.TestCase):
         self.assertTrue(white_group2.has_liberty((5, 6)))
         self.assertTrue(white_group2.has_liberty((4, 6)))
 
+
+class TestSelfDestructDisabled(unittest.TestCase):
+    def setUp(self):
+        self.black_stone = 'b'
+        self.white_Stone = 'w'
+        self.board_size = 7
+
+        configs = {'black_stone': self.black_stone,
+                   'white_stone': self.white_Stone,
+                   'board_size': self.board_size,
+                   'enable_self_destruct': False
+        }
+
+        self.game = Game(configs)
+        
     def test__self_destruct1(self):
-        self_destruct1(self.game)
-
-        black_group = self.game.gm._get_group(4, 4)
-        self.assertIsNone(black_group)
-
+        with self.assertRaises(SelfDestructException):
+            self_destruct1(self.game)
+        self.assertEqual(self.game.board[4, 4], Stone.EMPTY)
+        self.assertEqual(self.game.board[4, 3], Stone.WHITE)
+        self.assertEqual(self.game.board[3, 4], Stone.WHITE)
+        self.assertEqual(self.game.board[5, 4], Stone.WHITE)
+        self.assertEqual(self.game.board[4, 5], Stone.WHITE)
+        self.assertEqual(self.game.num_black_captured, 0)
+        self.assertIsNone(self.game.gm._get_group(4, 4))
+        
         self.assertFalse(self.game.gm.is_same_group(4, 5, 4, 3))
         self.assertFalse(self.game.gm.is_same_group(4, 5, 3, 4))
         self.assertFalse(self.game.gm.is_same_group(4, 5, 5, 4))
@@ -448,61 +477,73 @@ class TestGameGroups(unittest.TestCase):
         self.assertFalse(self.game.gm.is_same_group(4, 3, 5, 4))
         self.assertFalse(self.game.gm.is_same_group(3, 4, 5, 4))
 
-        white_group1 = self.game.gm._get_group(4, 5)
-        self.assertTrue(white_group1.has_liberty((4, 6)))
-        self.assertTrue(white_group1.has_liberty((4, 4)))
-        self.assertTrue(white_group1.has_liberty((3, 5)))
-        self.assertTrue(white_group1.has_liberty((5, 5)))
-        self.assertEqual(white_group1.num_liberties, 4)
+    def test__self_destruct2(self):
+        with self.assertRaises(SelfDestructException):
+            self_destruct2(self.game)
+        
+        self.assertEqual(self.game.board[4, 3], Stone.BLACK)
+        self.assertEqual(self.game.board[3, 4], Stone.BLACK)
+        self.assertEqual(self.game.board[2, 4], Stone.WHITE)
+        self.assertEqual(self.game.board[3, 3], Stone.WHITE)
+        self.assertEqual(self.game.board[4, 2], Stone.WHITE)
+        self.assertEqual(self.game.board[5, 3], Stone.WHITE)
+        self.assertEqual(self.game.board[5, 4], Stone.WHITE)
+        self.assertEqual(self.game.board[4, 5], Stone.WHITE)
+        self.assertEqual(self.game.board[3, 5], Stone.WHITE)
+        self.assertEqual(self.game.num_black_captured, 0)
 
-        white_group2 = self.game.gm._get_group(4, 3)
-        self.assertTrue(white_group2.has_liberty((4, 4)))
-        self.assertTrue(white_group2.has_liberty((4, 2)))
-        self.assertTrue(white_group2.has_liberty((3, 3)))
-        self.assertTrue(white_group2.has_liberty((5, 3)))
-        self.assertEqual(white_group2.num_liberties, 4)
+        self.assertTrue(self.game.gm.is_same_group(5, 3, 5, 4))
+        self.assertTrue(self.game.gm.is_same_group(4, 5, 3, 5))
+        
+        self.assertFalse(self.game.gm.is_same_group(2, 4, 3, 3))
+        self.assertFalse(self.game.gm.is_same_group(2, 4, 4, 2))
+        self.assertFalse(self.game.gm.is_same_group(2, 4, 5, 3))
+        self.assertFalse(self.game.gm.is_same_group(2, 4, 4, 5))
+        self.assertFalse(self.game.gm.is_same_group(3, 3, 4, 2))
+        self.assertFalse(self.game.gm.is_same_group(3, 3, 5, 3))
+        self.assertFalse(self.game.gm.is_same_group(3, 3, 4, 5))
+        self.assertFalse(self.game.gm.is_same_group(4, 2, 5, 3))
+        self.assertFalse(self.game.gm.is_same_group(4, 2, 4, 5))
+        self.assertFalse(self.game.gm.is_same_group(5, 3, 4, 5))
 
-        white_group3 = self.game.gm._get_group(3, 4)
-        self.assertTrue(white_group3.has_liberty((3, 5)))
-        self.assertTrue(white_group3.has_liberty((3, 3)))
-        self.assertTrue(white_group3.has_liberty((2, 4)))
-        self.assertTrue(white_group3.has_liberty((4, 4)))
-        self.assertEqual(white_group3.num_liberties, 4)
+        white_group1 = self.game.gm._get_group(2, 4)
+        self.assertTrue(white_group1.has_liberty((2, 3)))
+        self.assertTrue(white_group1.has_liberty((2, 5)))
+        self.assertTrue(white_group1.has_liberty((1, 4)))
 
-        white_group4 = self.game.gm._get_group(5, 4)
+        white_group2 = self.game.gm._get_group(3, 3)
+        self.assertTrue(white_group2.has_liberty((3, 2)))
+        self.assertTrue(white_group2.has_liberty((2, 3)))
+
+        white_group3 = self.game.gm._get_group(4, 2)
+        self.assertTrue(white_group3.has_liberty((3, 2)))
+        self.assertTrue(white_group3.has_liberty((5, 2)))
+        self.assertTrue(white_group3.has_liberty((4, 1)))
+
+        white_group4 = self.game.gm._get_group(5, 3)
+        self.assertTrue(white_group4.has_liberty((5, 2)))
         self.assertTrue(white_group4.has_liberty((5, 5)))
-        self.assertTrue(white_group4.has_liberty((5, 3)))
         self.assertTrue(white_group4.has_liberty((4, 4)))
+        self.assertTrue(white_group4.has_liberty((6, 3)))
         self.assertTrue(white_group4.has_liberty((6, 4)))
-        self.assertEqual(white_group4.num_liberties, 4)
 
-    def test_self_destruct3(self):
-        self_destruct3(self.game)
+        white_group5 = self.game.gm._get_group(3, 5)
+        self.assertTrue(white_group5.has_liberty((3, 6)))
+        self.assertTrue(white_group5.has_liberty((4, 4)))
+        self.assertTrue(white_group5.has_liberty((4, 6)))
+        self.assertTrue(white_group5.has_liberty((2, 5)))
+        self.assertTrue(white_group5.has_liberty((5, 5)))
+
+    def test__self_destruct3(self):
+        with self.assertRaises(SelfDestructException):
+            self_destruct3(self.game)
 
         for y, x in [(2, 2), (2, 3), (2, 4), (3, 4), (4, 4), (4, 3), (4, 2), (3, 2)]:
-            self.assertIsNone(self.game.gm._get_group(y, x))
+            self.assertEqual(self.game.board[y, x], Stone.BLACK)
 
-        white_coords = [(1, 1), (1, 2), (1, 3), (1, 4), (1, 5),
-                        (2, 5), (3, 5), (4, 5), (5, 5),
-                        (5, 4), (5, 3), (5, 2), (5, 1),
-                        (4, 1), (3, 1), (2, 1)]
-        white_groups = [self.game.gm._get_group(y, x) for y, x in white_coords]
-        self.assertEqual(len(set(white_groups)), 1)
-
-        white_group = self.game.gm._get_group(1, 1)
-        for coord in [(2, 2), (2, 3), (2, 4), (3, 4), (4, 4), (4, 3), (4, 2), (3, 2)]:
-            self.assertIn(coord, white_group.liberties)
-        
-        for x in range(1, 6):
-            self.assertIn((0, x), white_group.liberties)
-
-        for y in range(1, 6):
-            self.assertIn((y, 6), white_group.liberties)
-
-        for x in range(5, 0, -1):
-            self.assertIn((6, x), white_group.liberties)
-
-        for y in range(5, 0, -1):
-            self.assertIn((y, 0), white_group.liberties)
-
-        self.assertEqual(white_group.num_liberties, 28)
+        for y, x in [(1, 1), (1, 2), (1, 3), (1, 4), (1, 5),
+                     (2, 5), (3, 5), (4, 5), (5, 5),
+                     (5, 4), (5, 3), (5, 2), (5, 1),
+                     (4, 1), (3, 1), (2, 1)]:
+            self.assertEqual(self.game.board[y, x], Stone.WHITE)
+        self.assertEqual(self.game.num_black_captured, 0)

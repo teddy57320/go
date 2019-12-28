@@ -36,7 +36,11 @@ class Board(np.ndarray):
         return coords
 
     def place_stone(self, stone, y, x):
+        assert(stone != Stone.EMPTY)
         self[y][x] = stone
+
+    def remove_stone(self, y, x):
+        self[y][x] = Stone.EMPTY
 
     def _value_to_render(self, x):
         s = None
