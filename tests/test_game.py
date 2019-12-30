@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from src.game import Game, Group
 from src.utils import Stone
-from src.exceptions import SelfDestructException
+from src.exceptions import SelfDestructException, KoException
 
 def capture1(game):
     '''
@@ -547,3 +547,56 @@ class TestSelfDestructDisabled(unittest.TestCase):
                      (4, 1), (3, 1), (2, 1)]:
             self.assertEqual(self.game.board[y, x], Stone.WHITE)
         self.assertEqual(self.game.num_black_captured, 0)
+
+
+class TestKo(unittest.TestCase):
+    def setUp(self):
+        self.black_stone = 'b'
+        self.white_Stone = 'w'
+        self.board_size = 7
+
+        configs = {'black_stone': self.black_stone,
+                   'white_stone': self.white_Stone,
+                   'board_size': self.board_size,
+                   'enable_self_destruct': False
+        }
+
+        self.game = Game(configs)
+
+    def test__ko1(self):
+        self.game.place_black(2, 2)
+        self.game.place_black(3, 1)
+        self.game.place_black(4, 2)
+        self.game.place_white(2, 3)
+        self.game.place_white(3, 4)
+        self.game.place_white(4, 3)
+        self.game.place_black(3, 3)
+        self.game.place_white(3, 2)
+
+        with self.assertRaises(KoException):
+            self.game.place_black(3, 3)
+
+        self.assertEqual(self.game.board[3, 3], Stone.EMPTY)
+        self.assertEqual(self.game.board[2, 2], Stone.BLACK)
+        self.assertEqual(self.game.board[3, 1], Stone.BLACK)
+        self.assertEqual(self.game.board[4, 2], Stone.BLACK)
+        self.assertEqual(self.game.board[2, 3], Stone.WHITE)
+        self.assertEqual(self.game.board[3, 4], Stone.WHITE)
+        self.assertEqual(self.game.board[4, 3], Stone.WHITE)
+        self.assertEqual(self.game.board[3, 2], Stone.WHITE)
+
+    def test_ko2(self):
+        self.game.place_black(0, 0)
+        self.game.place_black(1, 1)
+        self.game.place_black(0, 2)
+        self.game.place_white(1, 0)
+        self.game.place_white(0, 1)
+
+        with self.assertRaises(KoException):
+            self.game.place_black(0, 0)
+        
+        self.assertEqual(self.game.board[0, 0], Stone.EMPTY)
+        self.assertEqual(self.game.board[1, 1], Stone.BLACK)
+        self.assertEqual(self.game.board[0, 2], Stone.BLACK)
+        self.assertEqual(self.game.board[1, 0], Stone.WHITE)
+        self.assertEqual(self.game.board[0, 1], Stone.WHITE)        

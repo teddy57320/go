@@ -91,6 +91,7 @@ class GroupManager(object):
             Stone.WHITE: 0,
             Stone.BLACK: 0
         }
+        self.ko = None
         self.enable_self_destruct = enable_self_destruct
 
     def _get_group(self, y, x):
@@ -105,7 +106,6 @@ class GroupManager(object):
     def _process_capture(self, group):
         if group.num_liberties > 0:
             return False
-        group.assign_group(None)
         self.captured_groups.add(group)
         return True
 
@@ -118,6 +118,7 @@ class GroupManager(object):
         opposite_stone = get_opposite_stone(stone)
         ncoords = self.board.get_neighbour_coordinates(y, x)
         new_group_liberties = set()
+        captured = []
         uncaptured = []
 
         for ny, nx in ncoords:
@@ -129,14 +130,30 @@ class GroupManager(object):
             elif self.board[ny, nx] == opposite_stone:
                 new_group_liberties.add((ny, nx))
                 g.remove_liberty((y, x))
-                captured = self._process_capture(g)
-                if not captured:
+                is_captured = self._process_capture(g)
+                if is_captured:
+                    captured.append((ny, nx))
+                else:
                     uncaptured.append((ny, nx))
 
             else:
                 groups.add(g)
 
         new_group = Group.merge(stone, groups, (y, x), liberties=new_group_liberties)
+
+        if len(captured) == 1:
+            cy, cx = captured[0]
+            captured_group = self._get_group(cy, cx)
+            if (cy, cx) == self.ko:
+                captured_group.restore_liberty((y, x))
+                raise KoException('You may not repeat the last board state. Please choose a different move')
+            if captured_group.num_coords == 1:
+                self.ko = (y, x)
+        else:
+            self.ko = None
+
+        for cy, cx in captured:
+            self._get_group(cy, cx).assign_group(None)
 
         # if we fail to capture an adjacent opposite stone, then it will 
         # decrease this group's liberty, potentially resulting in self destruction
@@ -163,21 +180,9 @@ class GroupManager(object):
             g.assign_group(new_group)
         self._group_map[y][x] = new_group
 
-        return True
-
-    def update_state(self):
-        
+        # restore liberties to those who had liberties removed by a group that was captured
         for g in self.captured_groups:
-
-            # clear captured regions on board
-            for y, x in g.coords:
-                self.board[y, x] = Stone.EMPTY
-                self._group_map[y][x] = None
-
-            # when a group is captured, its perimeter groups have their
-            # liberties changed
-            coords = g.removed_liberties
-            for y, x in coords:
+            for y, x in g.removed_liberties:
                 group_to_change = self._get_group(y, x)
                 if group_to_change is None:
                     continue
@@ -185,6 +190,22 @@ class GroupManager(object):
                 for ncoord in neighbour_coords:
                     if ncoord in g.coords:
                         group_to_change.restore_liberty(ncoord)
+
+        return True
+
+    def update_state(self):
+        stone = None
+
+        for g in self.captured_groups:
+
+            # only one type of stone can possibly be captured
+            stone = stone or g.stone
+            assert(stone == g.stone)
+
+            # clear captured regions on board
+            for y, x in g.coords:
+                self.board[y, x] = Stone.EMPTY
+                self._group_map[y][x] = None
 
             # record the captured groups
             self.num_captured_stones[g.stone] += g.num_coords
@@ -219,6 +240,9 @@ class Game(object):
         try:
             self.gm.resolve_groups(y, x)
         except SelfDestructException as e:
+            self.board.remove_stone(y, x)
+            raise e
+        except KoException as e:
             self.board.remove_stone(y, x)
             raise e
             
