@@ -600,3 +600,43 @@ class TestKo(unittest.TestCase):
         self.assertEqual(self.game.board[0, 2], Stone.BLACK)
         self.assertEqual(self.game.board[1, 0], Stone.WHITE)
         self.assertEqual(self.game.board[0, 1], Stone.WHITE)        
+
+
+class TestScore(unittest.TestCase):
+    def setUp(self):
+        self.black_stone = 'b'
+        self.white_Stone = 'w'
+        self.board_size = 7
+
+        configs = {'black_stone': self.black_stone,
+                   'white_stone': self.white_Stone,
+                   'board_size': self.board_size,
+                   'enable_self_destruct': False
+        }
+
+        self.game = Game(configs)
+
+    def test__capture1(self):
+        capture1(self.game)
+        scores = self.game.get_scores()
+        self.assertEqual(scores[Stone.BLACK], -1)
+        self.assertEqual(scores[Stone.WHITE], 45)
+
+    def test__capture2(self):
+        capture2(self.game)
+        scores = self.game.get_scores()
+        self.assertEqual(scores[Stone.BLACK], -3)
+        self.assertEqual(scores[Stone.WHITE], 42)
+
+    def test__capture3(self):
+        capture3(self.game)
+        scores = self.game.get_scores()
+        self.assertEqual(scores[Stone.BLACK], -1)
+        self.assertEqual(scores[Stone.WHITE], 43)
+
+    def test__neutral(self):
+        capture2(self.game)
+        self.game.place_black(1, 1)
+        scores = self.game.get_scores()
+        self.assertEqual(scores[Stone.BLACK], -3)
+        self.assertEqual(scores[Stone.WHITE], 3)

@@ -258,3 +258,45 @@ class Game(object):
 
     def render_board(self):
         self.board._render()
+
+    def get_scores(self):
+
+        scores = {Stone.BLACK: 0,
+                  Stone.WHITE: 0
+                 }
+        traversed = make_2d_array(self.board_size, self.board_size, default=lambda: False)
+        for y in range(self.board_size):
+            for x in range(self.board_size):
+                if not traversed[y][x] and self.board[y, x] == Stone.EMPTY:
+                    score, stone = self._traverse_territory(y, x, traversed)
+                    if stone != Stone.EMPTY:
+                        scores[stone] += score
+
+        scores[Stone.BLACK] -= self.num_black_captured
+        scores[Stone.WHITE] -= self.num_white_captured
+        return scores
+
+    def _traverse_territory(self, y, x, traversed):
+        traversed[y][x] = True
+        search = [(y, x)]
+        stone = None
+        count = 1
+        is_neutral = False
+
+        while search:
+            y, x = search.pop()
+            for ny, nx in self.board.get_neighbour_coordinates(y, x):
+                this_stone = self.board[ny, nx]
+                if this_stone != Stone.EMPTY:
+                    stone = stone or this_stone
+                    if stone != this_stone:
+                        is_neutral = True                
+                if not traversed[ny][nx]:
+                    if this_stone == Stone.EMPTY:
+                        count += 1
+                        search.append((ny, nx))
+                traversed[ny][nx] = True
+
+        if is_neutral:
+            return 0, Stone.EMPTY
+        return count, stone
