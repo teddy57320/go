@@ -146,6 +146,7 @@ class GroupManager(object):
             captured_group = self._get_group(cy, cx)
             if (cy, cx) == self.ko:
                 captured_group.restore_liberty((y, x))
+                self.captured_groups.discard(captured_group)
                 raise KoException('You may not repeat the last board state. Please choose a different move')
             if captured_group.num_coords == 1:
                 self.ko = (y, x)
@@ -174,6 +175,7 @@ class GroupManager(object):
                     if self.board[ny, nx] == opposite_stone:
                         g = self._get_group(ny, nx)
                         g.restore_liberty((y, x))
+                        self.captured_groups.discard(g)
                 raise SelfDestructException('Self destruction is not permitted. Please choose a different move.')
 
         for g in groups:
@@ -219,12 +221,13 @@ class Game(object):
         self.board_size = config['board_size']
         self.moves = []
         self.gm = GroupManager(self.board, enable_self_destruct=config['enable_self_destruct'])
+        self.count_pass = 0
 
-    def undo_last_move(self):
-        if not self.moves:
-            return
-        y, x = self.moves.pop()
-        self.board[y, x] = Stone.EMPTY
+    # def undo_last_move(self):
+    #     if not self.moves:
+    #         return
+    #     y, x = self.moves.pop()
+    #     self.board[y, x] = Stone.EMPTY        
 
     def place_black(self, y, x):
         self._place_stone(Stone.BLACK, y, x)
@@ -232,9 +235,19 @@ class Game(object):
     def place_white(self, y, x):
         self._place_stone(Stone.WHITE, y, x)
 
+    def pass_turn(self):
+        self.count_pass += 1
+
+    def is_over(self):
+        return self.count_pass >= 2
+    
+    def is_within_bounds(self, y, x):
+        return self.board.is_within_bounds(y, x)
+
     def _place_stone(self, stone, y, x):
         if stone == Stone.EMPTY:
             return
+        self.count_pass = 0
         self.board.place_stone(stone, y, x)
 
         try:
@@ -269,7 +282,7 @@ class Game(object):
             for x in range(self.board_size):
                 if not traversed[y][x] and self.board[y, x] == Stone.EMPTY:
                     score, stone = self._traverse_territory(y, x, traversed)
-                    if stone != Stone.EMPTY:
+                    if stone is not None and stone != Stone.EMPTY:
                         scores[stone] += score
 
         scores[Stone.BLACK] -= self.num_black_captured
@@ -300,3 +313,88 @@ class Game(object):
         if is_neutral:
             return 0, Stone.EMPTY
         return count, stone
+
+
+class GameUI(object):
+    def __init__(self,config):
+        self.game = Game(config)
+        self.turn = Stone.BLACK
+
+    def play(self):
+        
+        while not self.game.is_over():
+            is_turn_over = False
+            self.game.render_board()
+
+            while not is_turn_over:
+                move = self._prompt_move()
+                if move == 'pass':
+                    self.game.pass_turn()
+                    is_turn_over = True
+                else:
+                    is_turn_over = self._place_stone(move)
+
+            self._switch_turns()
+
+        self._display_result()
+
+    def _display_result(self):
+        scores = self.game.get_scores()
+        black_score = scores[Stone.BLACK]
+        white_score = scores[Stone.WHITE]
+
+        print(f'Black score: {black_score}')
+        print(f'White score: {white_score}')
+
+        if black_score == white_score:
+            print('The result is a tie!')
+        else:
+            winner = Stone.BLACK if black_score > white_score else Stone.WHITE
+            winner = self._get_player_name(winner)
+            print(f'The winner is {winner}!')        
+
+    def _place_stone(self, move):
+        y, x = move
+        try:
+            if self.turn == Stone.BLACK:
+                self.game.place_black(y, x)
+            elif self.turn == Stone.WHITE:
+                self.game.place_white(y, x)
+            is_turn_over = True
+        except Exception as e:
+            print(e)
+            is_turn_over = False
+        return is_turn_over
+
+    def _get_player_name(self, stone):
+        return 'Black' if stone == Stone.BLACK else 'White'
+
+    def _switch_turns(self):
+        self.turn = Stone.BLACK if self.turn == Stone.WHITE else Stone.WHITE
+        
+    def _prompt_move(self):
+        move = None
+        player = self._get_player_name(self.turn)
+        while not self._is_valid_move(move):
+            print('Please input a valid move (enter "pass" or a coordinate)')
+            move = input(f'{player} move: ')
+        
+        return self._parse_move(move)
+    
+    def _is_valid_move(self, move):
+        if move == 'pass':
+            return True
+        try:
+            y, x = self._parse_coordinates(move)
+            return self.game.is_within_bounds(y, x)
+        except:
+            return False
+
+    def _parse_coordinates(self, move):
+        y, x = move.split(' ')
+        return int(y), int(x)
+    
+    def _parse_move(self, move):
+        if move == 'pass':
+            return move
+        return self._parse_coordinates(move)

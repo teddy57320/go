@@ -1,9 +1,10 @@
 import yaml
 from src.board import Board
-from src.game import Game
+from src.game import GameUI
 
 def main(config):
-    print(config)
+    game = GameUI(config)
+    game.play()
 
 if __name__ == '__main__':
 
@@ -11,8 +12,8 @@ if __name__ == '__main__':
     with open('config.yaml', 'r') as f:
         try:
             config = yaml.safe_load(f)
-        except yaml.YAMLError as exc:
-            print(f'Error: ')
+        except yaml.YAMLError as e:
+            print(f'Error: {e}')
 
     if config is not None:
         main(config)

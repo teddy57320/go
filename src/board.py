@@ -42,6 +42,9 @@ class Board(np.ndarray):
     def remove_stone(self, y, x):
         self[y][x] = Stone.EMPTY
 
+    def is_within_bounds(self, y, x):
+        return 0 <= y <= self.board_size and 0 <= x <= self.board_size
+
     def _value_to_render(self, x):
         s = None
         if x == Stone.EMPTY:
