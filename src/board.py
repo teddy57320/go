@@ -55,8 +55,15 @@ class Board(np.ndarray):
         return f'[{s}]'
 
     def _render(self):
-        print('\n   ' + '  '.join([str(x) for x in range(self.board_size)]))
+        print('\n   ' + '  '.join([self._index_to_label(x) \
+                            for x in range(self.board_size)]))
         for row in range(self.board_size):
+            label = self._index_to_label(row)
             board_row = map(self._value_to_render, self[row])
-            print(f'{row} ' + ''.join(board_row))
+            print(f'{label} ' + ''.join(board_row))
         print('')
+
+    def _index_to_label(self, idx):
+        if idx < 10:
+            return str(idx)
+        return chr(idx - 10 + ord('A'))

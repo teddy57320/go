@@ -4,3 +4,5 @@ class SelfDestructException(Exception):
 class KoException(Exception):
     pass
 
+class InvalidInputException(Exception):
+    pass

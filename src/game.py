@@ -1,7 +1,8 @@
 from src.board import Board
 from src.utils import Stone, make_2d_array
 from src.group import Group, GroupManager
-from src.exceptions import SelfDestructException, KoException
+from src.exceptions import (
+    SelfDestructException, KoException, InvalidInputException)
 
 class Game(object):
     def __init__(self, config):
@@ -173,9 +174,24 @@ class GameUI(object):
             return False
 
     def _parse_coordinates(self, move):
-        y, x = move.split(' ')
-        return int(y), int(x)
+        y, x = move.strip().split()
+        y = self._label_to_coord(y)
+        x = self._label_to_coord(x)
+        return y, x
     
+    def _label_to_coord(self, label):
+        if label.isnumeric():
+            coord = int(label)
+            if coord >= 10:
+                raise InvalidInputException('')
+            return int(label)
+        if label.isalpha() and label >= 'A':
+            diff = ord(label) - ord('A')
+            if diff < 0:
+                raise InvalidInputException('')
+            return 10 + diff
+        raise InvalidInputException('')
+
     def _parse_move(self, move):
         if move == 'pass':
             return move
