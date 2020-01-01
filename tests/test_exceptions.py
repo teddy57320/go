@@ -7,6 +7,9 @@ from tests.utils import (
     self_destruct1, self_destruct2, self_destruct3)
 
 class TestSelfDestructDisabled(unittest.TestCase):
+    '''
+    Test case for raising self-destruction exceptions
+    '''
     def setUp(self):
         self.black_stone = 'b'
         self.white_Stone = 'w'
@@ -111,6 +114,9 @@ class TestSelfDestructDisabled(unittest.TestCase):
 
 
 class TestKo(unittest.TestCase):
+    '''
+    Test case for raising ko rule violation exceptions
+    '''
     def setUp(self):
         self.black_stone = 'b'
         self.white_Stone = 'w'
