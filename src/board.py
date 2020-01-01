@@ -23,7 +23,7 @@ class Board(np.ndarray):
         self.black_stone_render = getattr(obj, 'black_stone_render')
         self.white_stone_render = getattr(obj, 'white_stone_render')
 
-    def get_neighbour_coordinates(self, y, x):
+    def get_liberty_coords(self, y, x):
         coords = []
         if y > 0:
             coords.append((y-1, x))

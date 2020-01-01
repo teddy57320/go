@@ -37,10 +37,10 @@ class Group(object):
         return new_group
 
     @staticmethod
-    def merge(stone, groups, merge_coord, liberties=None):
+    def merge(stone, groups, merge_coord, liberties=None, removed_liberties=None):
         liberties = liberties or set()
         coords = set()
-        removed_liberties = set()
+        removed_liberties = removed_liberties or set()
         for g in groups:
             
             '''
@@ -109,104 +109,102 @@ class GroupManager(object):
         self.captured_groups.add(group)
         return True
 
-    def is_same_group(self, y1, x1, y2, x2):
-        return self._get_group(y1, x1) == self._get_group(y2, x2)
-
-    def resolve_groups(self, y, x):
-        groups = set()
-        stone = self.board[y, x]
-        opposite_stone = get_opposite_stone(stone)
-        ncoords = self.board.get_neighbour_coordinates(y, x)
-        new_group_liberties = set()
-        captured = []
-        uncaptured = []
-
-        for ny, nx in ncoords:
-            g = self._get_group(ny, nx)
-
-            if self.board[ny, nx] == Stone.EMPTY:
-                new_group_liberties.add((ny, nx))
-
-            elif self.board[ny, nx] == opposite_stone:
-                new_group_liberties.add((ny, nx))
-                g.remove_liberty((y, x))
-                is_captured = self._process_capture(g)
-                if is_captured:
-                    captured.append((ny, nx))
-                else:
-                    uncaptured.append((ny, nx))
-
-            else:
-                groups.add(g)
-
-        new_group = Group.merge(stone, groups, (y, x), liberties=new_group_liberties)
-
+    def _check_ko(self, y, x, captured):
         if len(captured) == 1:
             cy, cx = captured[0]
             captured_group = self._get_group(cy, cx)
             if (cy, cx) == self.ko:
-                captured_group.restore_liberty((y, x))
-                self.captured_groups.discard(captured_group)
+                self.undo_stone(y, x)
                 raise KoException('You may not repeat the last board state. Please choose a different move')
             if captured_group.num_coords == 1:
                 self.ko = (y, x)
         else:
             self.ko = None
 
-        for cy, cx in captured:
-            self._get_group(cy, cx).assign_group(None)
-
-        # if we fail to capture an adjacent opposite stone, then it will 
-        # decrease this group's liberty, potentially resulting in self destruction
-        for uy, ux in uncaptured:
-            new_group.remove_liberty((uy, ux))
-
+    def _check_self_destruct(self, y, x, new_group):
         self_destruct = self._process_capture(new_group)
         if self_destruct:
-            new_group = None
-
-            '''
-            undo any processing we have done to restore the game state
-            no need to "uncapture" any opposite stone groups since if there were a 
-            capture, it would not be a self destruction
-            '''
+            new_group.assign_group(None)
             if not self.enable_self_destruct:
-                for ny, nx in ncoords:
-                    if self.board[ny, nx] == opposite_stone:
-                        g = self._get_group(ny, nx)
-                        g.restore_liberty((y, x))
-                        self.captured_groups.discard(g)
+                self.undo_stone(y, x)
                 raise SelfDestructException('Self destruction is not permitted. Please choose a different move.')
+        
+    def is_same_group(self, y1, x1, y2, x2):
+        return self._get_group(y1, x1) == self._get_group(y2, x2)
+
+    def undo_stone(self, y, x):
+        stone = self.board[y, x]
+        opposite_stone = get_opposite_stone(stone)
+        for ly, lx in self.board.get_liberty_coords(y, x):
+            if self.board[ly, lx] == opposite_stone:
+                group = self._get_group(ly, lx)
+                group.restore_liberty((y, x))
+                group.assign_group(group)
+                self.captured_groups.discard(group)
+    
+        self.board.remove_stone(y, x)
+
+    def resolve_groups(self, y, x):
+        groups = set()
+        stone = self.board[y, x]
+        opposite_stone = get_opposite_stone(stone)
+        new_group_liberties = set()
+        new_group_removed_liberties = set()
+        captured = []
+
+        for ly, lx in self.board.get_liberty_coords(y, x):
+            g = self._get_group(ly, lx)
+
+            if self.board[ly, lx] == Stone.EMPTY:
+                new_group_liberties.add((ly, lx))
+
+            elif self.board[ly, lx] == opposite_stone:
+                g.remove_liberty((y, x))
+                is_captured = self._process_capture(g)
+                if is_captured:
+                    captured.append((ly, lx))
+                    new_group_liberties.add((ly, lx))
+                else:
+                    new_group_removed_liberties.add((ly, lx))
+
+            else:
+                groups.add(g)
+
+        self._check_ko(y, x, captured)
+
+        new_group = Group.merge(stone, groups, (y, x),  
+                                liberties=new_group_liberties,
+                                removed_liberties=new_group_removed_liberties
+                               )
+
+        self._check_self_destruct(y, x, new_group)
 
         for g in groups:
             g.assign_group(new_group)
         self._group_map[y][x] = new_group
 
-        # restore liberties to those who had liberties removed by a group that was captured
+        return True
+
+    def update_state(self):
+
         for g in self.captured_groups:
+
+            # nullify group
+            g.assign_group(None)
+
+            # restore liberties to those who had liberties removed by a group that was captured
             for y, x in g.removed_liberties:
                 group_to_change = self._get_group(y, x)
                 if group_to_change is None:
                     continue
-                neighbour_coords = self.board.get_neighbour_coordinates(y, x)
-                for ncoord in neighbour_coords:
-                    if ncoord in g.coords:
-                        group_to_change.restore_liberty(ncoord)
-
-        return True
-
-    def update_state(self):
-        stone = None
-
-        for g in self.captured_groups:
-
-            # only one type of stone can possibly be captured
-            stone = stone or g.stone
-            assert(stone == g.stone)
+                liberty_coords = self.board.get_liberty_coords(y, x)
+                for lcoord in liberty_coords:
+                    if lcoord in g.coords:
+                        group_to_change.restore_liberty(lcoord)
 
             # clear captured regions on board
             for y, x in g.coords:
-                self.board[y, x] = Stone.EMPTY
+                self.board.remove_stone(y, x)
                 self._group_map[y][x] = None
 
             # record the captured groups
@@ -223,11 +221,11 @@ class Game(object):
         self.gm = GroupManager(self.board, enable_self_destruct=config['enable_self_destruct'])
         self.count_pass = 0
 
-    # def undo_last_move(self):
-    #     if not self.moves:
-    #         return
-    #     y, x = self.moves.pop()
-    #     self.board[y, x] = Stone.EMPTY        
+    def undo_last_move(self):
+        if not self.moves:
+            return
+        y, x = self.moves.pop()
+        self.board[y, x] = Stone.EMPTY        
 
     def place_black(self, y, x):
         self._place_stone(Stone.BLACK, y, x)
@@ -298,17 +296,17 @@ class Game(object):
 
         while search:
             y, x = search.pop()
-            for ny, nx in self.board.get_neighbour_coordinates(y, x):
-                this_stone = self.board[ny, nx]
+            for ly, lx in self.board.get_liberty_coords(y, x):
+                this_stone = self.board[ly, lx]
                 if this_stone != Stone.EMPTY:
                     stone = stone or this_stone
                     if stone != this_stone:
                         is_neutral = True                
-                if not traversed[ny][nx]:
+                if not traversed[ly][lx]:
                     if this_stone == Stone.EMPTY:
                         count += 1
-                        search.append((ny, nx))
-                traversed[ny][nx] = True
+                        search.append((ly, lx))
+                traversed[ly][lx] = True
 
         if is_neutral:
             return 0, Stone.EMPTY
