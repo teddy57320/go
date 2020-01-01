@@ -1,5 +1,4 @@
 import unittest
-import numpy as np
 from src.game import Game, Group
 from src.utils import Stone
 from src.exceptions import SelfDestructException, KoException
